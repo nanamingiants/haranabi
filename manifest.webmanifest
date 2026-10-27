@@ -1,0 +1,17 @@
+{
+  "name": "ハラナビ 西武池袋線",
+  "short_name": "ハラナビ",
+  "description": "乗っている電車の向きと種別を判定し、次に改札内トイレへ行ける駅を示します。位置情報は端末の外に出しません。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f2ee",
+  "theme_color": "#e27a0c",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

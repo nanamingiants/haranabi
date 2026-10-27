@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ハラナビ西武池袋線</title>
+<meta name="theme-color" content="#e27a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ハラナビ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<style>
+/* Layout: one narrow column like a platform board — status row, a big "next toilet" panel that can show several candidates, then the line as a vertical strip; controls docked at the bottom */
+:root{
+  --bg:#f5f2ee; --surface:#ffffff; --ink:#1d1a17; --muted:#6b635b; --rule:#e2dbd3;
+  --line:#e27a0c; --line-ink:#a8560a; --line-soft:#fbead6; --warn:#b42318; --warn-soft:#fbe4e1; --ok:#1d7f48; --ok-soft:#e0f2e8;
+  /* 外部フォントは読み込まない（第三者サーバーへの通信をゼロにするため） */
+  --display:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",system-ui,sans-serif;
+  --body:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",system-ui,sans-serif;
+  --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141210; --surface:#1f1b18; --ink:#f1ebe4; --muted:#a69c92; --rule:#352f2a;
+  --line:#f39a3a; --line-ink:#f6ad5c; --line-soft:#3a2716; --warn:#ff8a7a; --warn-soft:#3a1c18; --ok:#56cc8c; --ok-soft:#143726; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141210; --surface:#1f1b18; --ink:#f1ebe4; --muted:#a69c92; --rule:#352f2a;
+  --line:#f39a3a; --line-ink:#f6ad5c; --line-soft:#3a2716; --warn:#ff8a7a; --warn-soft:#3a1c18; --ok:#56cc8c; --ok-soft:#143726; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.6}
+.wrap{max-width:560px;margin:0 auto;padding-block:18px 150px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:flex;flex-direction:column;gap:14px}
+
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.lineMark{width:38px;height:38px;border-radius:50%;border:4px solid var(--line);display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:13px;color:var(--line-ink);background:var(--surface)}
+.brand h1{margin:0;font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:.02em;line-height:1.1}
+.brand small{display:block;font-size:11px;color:var(--muted);letter-spacing:.08em;font-weight:500}
+.status{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--rule);color:var(--muted);display:flex;align-items:center;gap:6px}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.status.live i{background:var(--ok)}
+.status.demo i{background:var(--line)}
+.status.err i{background:var(--warn)}
+
+.controls{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:flex-start;gap:8px}
+.row > span.lbl{font-size:11px;letter-spacing:.1em;color:var(--muted);width:3.4em;font-weight:700;padding-top:8px;flex:none}
+.seg{display:flex;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap;min-width:0}
+.seg button{font:inherit;font-size:13px;border:0;background:transparent;color:var(--ink);padding:5px 10px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--line);color:#1d1a17;font-weight:700}
+.seg button.dim{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--rule)}
+.seg button.cand{box-shadow:inset 0 0 0 1.5px var(--line)}
+.seg button:focus-visible,.btn:focus-visible,.st:focus-visible{outline:2px solid var(--line);outline-offset:2px}
+.infer{font-size:12px;color:var(--muted);padding-left:calc(3.4em + 8px)}
+.infer b{color:var(--line-ink)}
+
+.hero{background:var(--surface);border-radius:16px;border:1px solid var(--rule);padding:18px 18px 16px 22px;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--line)}
+.hero .eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+.hero .name{font-family:var(--display);font-weight:900;font-size:clamp(34px,10vw,46px);line-height:1.1;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;text-wrap:balance}
+.hero .code{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--line-ink);border:2px solid var(--line);border-radius:6px;padding:0 6px;line-height:1.5}
+.hero .eta{font-size:17px;font-weight:700}
+.hero .eta .num{font-family:var(--mono);font-size:30px;font-variant-numeric:tabular-nums;color:var(--line-ink)}
+.hero .door{font-size:13px;color:var(--muted)}
+.alt{display:flex;flex-direction:column;gap:4px;margin-top:6px;padding-top:10px;border-top:1px solid var(--rule)}
+.alt div{font-size:14px;display:flex;justify-content:space-between;gap:10px}
+.alt span.t{color:var(--muted);font-size:12px}
+.alt b{font-weight:700}
+.alt .m{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--line-ink);white-space:nowrap}
+
+.alerts{display:flex;flex-direction:column;gap:8px}
+.alert{border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;background:var(--warn-soft);color:var(--ink);border-left:4px solid var(--warn)}
+.alert.info{background:var(--line-soft);border-left-color:var(--line)}
+.alert b{color:var(--warn)}
+.alert.info b{color:var(--line-ink)}
+
+.stripHead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.stripHead h2{margin:0;font-size:13px;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.stripHead span{font-size:12px;color:var(--muted)}
+.strip{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--rule);border-radius:16px;overflow:hidden}
+.st{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px solid var(--rule);padding:8px 14px 8px 8px;cursor:pointer;position:relative;min-height:52px}
+.strip li:last-child .st{border-bottom:0}
+.st:hover{background:var(--line-soft)}
+.rail{position:relative;height:100%;display:grid;place-items:center;align-self:stretch}
+.rail::before{content:"";position:absolute;top:-10px;bottom:-10px;width:6px;background:var(--line);left:50%;transform:translateX(-50%)}
+.strip li:first-child .rail::before{top:50%}
+.strip li:last-child .rail::before{bottom:50%}
+.dot{position:relative;width:16px;height:16px;border-radius:50%;background:var(--surface);border:4px solid var(--line)}
+.st.maybe .dot{border-style:dashed;border-width:3px}
+.st.pass .dot{width:10px;height:10px;border-width:0;background:var(--surface)}
+.st.pass{color:var(--muted)}
+.st .nm{font-weight:700;font-size:16px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+.st .nm code{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:500}
+.tags{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.tag{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.no{background:var(--warn-soft);color:var(--warn)}
+.tag.maybe{background:var(--line-soft);color:var(--line-ink)}
+.tag.pass{background:transparent;color:var(--muted);border:1px solid var(--rule)}
+.min{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.here{display:flex;align-items:center;gap:10px;padding:8px 14px 8px 8px;border-bottom:1px solid var(--rule);background:var(--line-soft);font-size:13px;font-weight:700;color:var(--line-ink)}
+.here .rail{width:34px;min-height:22px}
+.here .train{position:relative;width:22px;height:14px;border-radius:4px;background:var(--line);box-shadow:0 0 0 3px var(--surface)}
+
+.privacy{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--muted);background:var(--surface);border:1px dashed var(--rule);border-radius:12px;padding:8px 12px}
+.privacy b{color:var(--ink)}
+.foot{font-size:11.5px;color:var(--muted);line-height:1.6;margin:0}
+.foot a{color:var(--line-ink)}
+
+.dock{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--rule);padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));z-index:5}
+.dockIn{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{font:inherit;font-size:14px;font-weight:700;border-radius:12px;padding:11px 10px;cursor:pointer;border:2px solid var(--line);background:var(--surface);color:var(--line-ink)}
+.btn.primary{background:var(--line);color:#1d1a17}
+.hint{font-size:11.5px;color:var(--muted);text-align:center}
+
+.sheetBg{position:fixed;inset:0;background:rgba(20,14,8,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);color:var(--ink);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding-top:20px;padding-bottom:calc(16px + env(safe-area-inset-bottom, 0px));padding-left:max(18px, env(safe-area-inset-left, 0px));padding-right:max(18px, env(safe-area-inset-right, 0px));display:flex;flex-direction:column;gap:12px;max-height:90%;overflow-y:auto}
+.sheet h3{margin:0;font-size:19px;font-weight:900;text-wrap:balance}
+.sheet dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}
+.sheet dt{font-weight:700;color:var(--line-ink);white-space:nowrap}
+.sheet dd{margin:0;min-width:0}
+.sheet .note{font-size:12px;color:var(--muted);margin:0}
+@media (prefers-reduced-motion: no-preference){.here .train{animation:bob 1.6s ease-in-out infinite}@keyframes bob{50%{transform:translateY(-2px)}}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="lineMark" aria-hidden="true">SI</div>
+      <h1>ハラナビ<small>西武池袋線 池袋〜飯能・改札内トイレ</small></h1>
+    </div>
+    <div class="status" id="status"><i></i><span id="statusText">待機中</span></div>
+  </header>
+
+  <section class="controls" aria-label="条件">
+    <div class="row"><span class="lbl">方向</span>
+      <div class="seg" id="dirSeg">
+        <button type="button" id="dirW" data-dir="-1">池袋方面（上り）</button>
+        <button type="button" id="dirE" data-dir="1">飯能方面（下り）</button>
+      </div>
+    </div>
+    <div class="row"><span class="lbl">種別</span><div class="seg" id="typeSeg"></div></div>
+    <div class="infer" id="infer"></div>
+  </section>
+
+  <section class="hero" id="hero" aria-live="polite"></section>
+  <div class="alerts" id="alerts"></div>
+
+  <div class="stripHead"><h2>この先の駅</h2><span>駅をタップで「今この駅」に設定</span></div>
+  <ol class="strip" id="strip"></ol>
+
+  <div class="privacy"><span aria-hidden="true">●</span><span>位置情報は<b>この端末の中だけ</b>で「池袋線のどの駅間か」に変換し、緯度経度はその場で捨てます。保存も送信もしません。</span></div>
+  <p class="foot">所要時間は駅間の目安から計算した概算です。停車駅とトイレ有無は西武鉄道公式情報をもとにした一覧（<a href="https://otakahero.com/ekinotoilet-si/" target="_blank" rel="noopener">otakahero</a>）を参照した試作データで、ダイヤ改正や工事で変わることがあります。特急・S-TRAINは車内にトイレがあるため対象外です。</p>
+</div>
+
+<div class="dock">
+  <div class="dockIn">
+    <div class="btns">
+      <button type="button" class="btn primary" id="gpsBtn">位置情報で追跡</button>
+      <button type="button" class="btn" id="demoBtn">デモを再生</button>
+    </div>
+    <div class="hint" id="hint">デモは池袋から快速急行に乗った想定で、約20倍速で走ります</div>
+  </div>
+</div>
+
+<div class="sheetBg" id="consent" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="consentTitle">
+    <h3 id="consentTitle">位置情報の使い方</h3>
+    <dl>
+      <dt>使う目的</dt><dd>池袋線のどの駅間にいるか、どちら向きに走っているか、どの駅を通過したかを判定するためだけに使います。</dd>
+      <dt>どこへ</dt><dd>どこにも送りません。計算はすべてこの端末の中で行います。</dd>
+      <dt>残すもの</dt><dd>「石神井公園〜大泉学園の6割地点」のような路線上の位置だけです。緯度経度は受け取った直後に捨て、保存もしません。</dd>
+      <dt>止まる条件</dt><dd>池袋線から離れたとき、画面を閉じたとき、開始から120分たったとき、終点に着いたときに自動で止まります。いつでも「追跡を止める」で止められます。</dd>
+    </dl>
+    <p class="note">このあとブラウザから位置情報の許可を求められます。許可しなくても、駅をタップする手動モードで使えます。</p>
+    <div class="btns">
+      <button type="button" class="btn" id="consentNo">やめる</button>
+      <button type="button" class="btn primary" id="consentYes">同意して開始</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 路線データ：西武池袋線 池袋〜飯能 =====
+// t: in=改札内トイレあり / none=改札外のみ。note: 補足
+const ST=[
+ {n:"池袋",c:"SI01",la:35.7295,lo:139.7109,t:"in"},
+ {n:"椎名町",c:"SI02",la:35.7266,lo:139.6942,t:"in"},
+ {n:"東長崎",c:"SI03",la:35.7301,lo:139.6835,t:"in"},
+ {n:"江古田",c:"SI04",la:35.7378,lo:139.6729,t:"in"},
+ {n:"桜台",c:"SI05",la:35.7386,lo:139.6623,t:"in"},
+ {n:"練馬",c:"SI06",la:35.7377,lo:139.6544,t:"in"},
+ {n:"中村橋",c:"SI07",la:35.7368,lo:139.6375,t:"in"},
+ {n:"富士見台",c:"SI08",la:35.7359,lo:139.6292,t:"in"},
+ {n:"練馬高野台",c:"SI09",la:35.7406,lo:139.6169,t:"in"},
+ {n:"石神井公園",c:"SI10",la:35.7438,lo:139.6067,t:"in"},
+ {n:"大泉学園",c:"SI11",la:35.7495,lo:139.5864,t:"in"},
+ {n:"保谷",c:"SI12",la:35.7480,lo:139.5671,t:"in"},
+ {n:"ひばりヶ丘",c:"SI13",la:35.7513,lo:139.5459,t:"in"},
+ {n:"東久留米",c:"SI14",la:35.7580,lo:139.5300,t:"in"},
+ {n:"清瀬",c:"SI15",la:35.7721,lo:139.5197,t:"in"},
+ {n:"秋津",c:"SI16",la:35.7788,lo:139.4960,t:"in"},
+ {n:"所沢",c:"SI17",la:35.7867,lo:139.4734,t:"in"},
+ {n:"西所沢",c:"SI18",la:35.7924,lo:139.4528,t:"in"},
+ {n:"小手指",c:"SI19",la:35.7939,lo:139.4317,t:"in"},
+ {n:"狭山ヶ丘",c:"SI20",la:35.7999,lo:139.4122,t:"in"},
+ {n:"武蔵藤沢",c:"SI21",la:35.8098,lo:139.3999,t:"in"},
+ {n:"稲荷山公園",c:"SI22",la:35.8273,lo:139.3897,t:"in",note:"トイレは所沢方面ホーム側にあります。"},
+ {n:"入間市",c:"SI23",la:35.8352,lo:139.3913,t:"in"},
+ {n:"仏子",c:"SI24",la:35.8434,lo:139.3768,t:"in"},
+ {n:"元加治",c:"SI25",la:35.8484,lo:139.3596,t:"in"},
+ {n:"飯能",c:"SI26",la:35.8509,lo:139.3183,t:"in"},
+];
+const LAST=ST.length-1;
+// 各停の池袋起点の累計分（目安）
+const CUM=[0,2,4,6,8,10,12,14,16,18,21,24,27,30,33,35,38,41,44,47,50,53,56,59,62,66];
+const SEG=CUM.slice(1).map((v,i)=>v-CUM[i]);
+const DWELL=0.5, PASS_BONUS=0.7;
+const R=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
+// 種別ごとの停車駅（index）。dir: その方向だけ運転
+const TYPES={
+  "各停":{stops:R(0,25)},
+  "準急":{stops:[0,5,...R(9,25)]},
+  "通勤準急":{stops:[0,5,...R(10,18)]},
+  "快速":{stops:[0,5,9,...R(12,25)]},
+  "通勤急行":{stops:[0,9,10,11,13,...R(16,25)],dir:-1},
+  "急行":{stops:[0,9,12,...R(16,25)]},
+  "快速急行":{stops:[0,9,12,16,18,22,25]},
+  // 地下鉄（副都心線・有楽町線）直通：池袋〜練馬は走らず、練馬から西武有楽町線へ
+  "快速急行(直通)":{stops:[5,9,12,16,18,22,25],from:5},
+};
+const TYPE_ORDER=Object.keys(TYPES);
+const STOPSET={}; for(const t of TYPE_ORDER) STOPSET[t]=new Set(TYPES[t].stops);
+const DIRNAME={"-1":"池袋方面","1":"飯能方面"};
+const DEMO={type:"快速急行",from:0,to:18,dir:1};
+
+// ===== 座標と路線上の距離 =====
+const LAT0=35.78, LON0=139.5, KX=Math.cos(LAT0*Math.PI/180)*111.32, KY=110.57;
+const xy=(la,lo)=>[(lo-LON0)*KX,(la-LAT0)*KY];
+const PTS=ST.map(s=>xy(s.la,s.lo));
+function project(la,lo){
+  const [px,py]=xy(la,lo); let best={d:1e9,u:0};
+  for(let i=0;i<LAST;i++){
+    const [ax,ay]=PTS[i],[bx,by]=PTS[i+1],dx=bx-ax,dy=by-ay;
+    let t=((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy); t=Math.max(0,Math.min(1,t));
+    const d=Math.hypot(ax+t*dx-px,ay+t*dy-py); if(d<best.d) best={d,u:i+t};
+  }
+  return best;
+}
+const SEGKM=PTS.slice(1).map((p,i)=>Math.hypot(p[0]-PTS[i][0],p[1]-PTS[i][1]));
+const CUMKM=SEGKM.reduce((a,d)=>(a.push(a[a.length-1]+d),a),[0]);
+const along=u=>{const i=Math.min(Math.floor(u),LAST-1);return CUMKM[i]+(u-i)*SEGKM[i];};
+function uToLatLng(u){const i=Math.min(Math.floor(u),LAST-1),f=u-i,a=ST[i],b=ST[i+1];return [a.la+(b.la-a.la)*f,a.lo+(b.lo-a.lo)*f];}
+
+// ===== 所要時間モデル =====
+function travel(u,k,dir,stops){
+  let t=0;
+  if(dir>0){const j=Math.floor(u+1e-9); if(j>=k) return 0; t+=(j+1-u)*SEG[j];
+    for(let m=j+1;m<k;m++){t+=stops.has(m)?DWELL:-PASS_BONUS; t+=SEG[m];}}
+  else{const j=Math.ceil(u-1e-9); if(j<=k) return 0; t+=(u-(j-1))*SEG[j-1];
+    for(let m=j-1;m>k;m--){t+=stops.has(m)?DWELL:-PASS_BONUS; t+=SEG[m-1];}}
+  return Math.max(0,t);
+}
+function advance(u,dir,mins,stops){
+  let pos=u,left=mins,guard=0;
+  while(left>0&&guard++<80){
+    if(dir>0){ if(pos>=LAST) return LAST; const j=Math.floor(pos+1e-9),s=SEG[j],rem=(j+1-pos)*s;
+      if(left<rem) return pos+left/s; left-=rem; pos=j+1; if(pos>=LAST) return LAST;
+      if(stops.has(pos)){ if(left<DWELL) return pos; left-=DWELL;} else left+=PASS_BONUS*0.5; }
+    else{ if(pos<=0) return 0; const j=Math.ceil(pos-1e-9),s=SEG[j-1],rem=(pos-(j-1))*s;
+      if(left<rem) return pos-left/s; left-=rem; pos=j-1; if(pos<=0) return 0;
+      if(stops.has(pos)){ if(left<DWELL) return pos; left-=DWELL;} else left+=PASS_BONUS*0.5; }
+  }
+  return pos;
+}
+
+// ===== 状態 =====
+const S={u:null,dir:1,typeSel:"auto",mode:"idle",stopped:{},passed:{},still:{},u0:null,
+  prevFix:null,dirScore:0,est:null,lastGood:0,statusMsg:"待機中",statusCls:"",
+  consented:false,offCount:0,gpsStart:0,pausedByHide:false,endSince:null};
+const OFF_LINE_KM=1.5, TRACK_MAX_MIN=120;
+function resetTrack(){S.stopped={};S.passed={};S.still={};S.u0=S.u;S.dirScore=0;S.prevFix=null;S.offCount=0;S.endSince=null;}
+
+// 種別の候補：方向で絞り、停車・通過の観測と矛盾するものを外す
+function dirTypes(){return TYPE_ORDER.filter(t=>{
+  const T=TYPES[t]; if(T.dir&&T.dir!==S.dir) return false;
+  // 直通列車は池袋〜練馬にいない：その区間にいる・その区間から乗ったなら候補から外す
+  if(T.from!=null){ if(S.u!=null&&S.u<T.from-0.05) return false; if(S.dir>0&&S.u0!=null&&S.u0<T.from-0.05) return false; }
+  return true;});}
+function candidates(){
+  if(S.typeSel!=="auto") return [S.typeSel];
+  const base=dirTypes();
+  const c=base.filter(t=>{const s=STOPSET[t];
+    for(const k in S.stopped) if(!s.has(+k)) return false;
+    for(const k in S.passed) if(s.has(+k)) return false;
+    return true;});
+  return c.length?c:base;
+}
+const observed=()=>Object.keys(S.stopped).length+Object.keys(S.passed).length>0;
+
+// ===== GPS・デモ共通の位置更新 =====
+// 緯度経度は project() に渡したらこの関数の外へ一切出さない
+function onFix(la,lo,timeMs,acc){
+  if(acc!=null&&acc>400){S.statusMsg="位置の精度が低いため推定中";render();return;}
+  const pr=project(la,lo); la=lo=null;
+  if(pr.d>OFF_LINE_KM){
+    S.offCount++;
+    if(S.mode==="gps"&&S.offCount>=3){stopTracking("池袋線から離れたので追跡を止めました");return;}
+    S.statusMsg="池袋線から離れています";S.statusCls="err";render();return;
+  }
+  S.offCount=0;
+  const u=pr.u; let speed=null;
+  if(S.prevFix){
+    const dt=(timeMs-S.prevFix.t)/3.6e6; if(dt>0) speed=Math.abs(along(u)-along(S.prevFix.u))/dt;
+    S.dirScore=Math.max(-1,Math.min(1,S.dirScore+u-S.prevFix.u));
+    if(Math.abs(S.dirScore)>0.12){const nd=S.dirScore>0?1:-1; if(nd!==S.dir){S.dir=nd;S.stopped={};S.passed={};S.u0=u;}}
+  }
+  if(S.u0==null) S.u0=u;
+  const k=Math.round(u);
+  if(Math.abs(u-k)<0.1&&speed!=null&&speed<8){S.still[k]=S.still[k]??timeMs; if(timeMs-S.still[k]>=10000) S.stopped[k]=true;}
+  else if(speed!=null&&speed>=8) S.still[k]=null;
+  for(let i=0;i<=LAST;i++){
+    if(S.dir*(u-i)>0.12&&S.dir*(S.u0-i)<0&&!S.stopped[i]&&!S.passed[i]) S.passed[i]=true;
+  }
+  S.u=u; S.prevFix={t:timeMs,u}; S.lastGood=Date.now(); S.est=null;
+  const atEnd=(S.dir>0&&u>LAST-0.05)||(S.dir<0&&u<0.05);
+  if(atEnd&&speed!=null&&speed<8){S.endSince=S.endSince??timeMs; if(S.mode==="gps"&&timeMs-S.endSince>30000){stopTracking("終点に着いたので追跡を止めました");return;}} else S.endSince=null;
+  S.statusMsg=S.mode==="demo"?"デモ走行中":"GPSで追跡中"; S.statusCls=S.mode==="demo"?"demo":"live";
+  render();
+}
+
+// ===== 次のトイレ =====
+function ahead(){
+  const out=[]; if(S.u==null) return out;
+  if(S.dir>0){for(let k=Math.floor(S.u+0.02)+1;k<=LAST;k++) out.push(k);}
+  else{for(let k=Math.ceil(S.u-0.02)-1;k>=0;k--) out.push(k);}
+  return out;
+}
+function nextToilet(t){const s=STOPSET[t]; for(const k of ahead()) if(s.has(k)&&ST[k].t!=="none") return {k,min:travel(S.u,k,S.dir,s)}; return null;}
+function nextStop(t){const s=STOPSET[t]; for(const k of ahead()) if(s.has(k)) return {k,min:travel(S.u,k,S.dir,s)}; return null;}
+const fmt=m=>m<1?"1分以内":`約${Math.round(m)}分`;
+
+// ===== 描画 =====
+const $=id=>document.getElementById(id);
+function addAlert(h,cls){const d=document.createElement("div");d.className="alert "+(cls||"");d.innerHTML=h;$("alerts").appendChild(d);}
+function render(){
+  const cands=candidates(), all=dirTypes();
+  $("dirW").setAttribute("aria-pressed",S.dir<0); $("dirE").setAttribute("aria-pressed",S.dir>0);
+  // 種別ボタン
+  const seg=$("typeSeg"); seg.innerHTML="";
+  for(const t of ["auto",...TYPE_ORDER]){
+    const b=document.createElement("button"); b.type="button"; b.dataset.type=t; b.textContent=t==="auto"?"自動":t;
+    b.setAttribute("aria-pressed",S.typeSel===t);
+    if(t!=="auto"&&S.typeSel==="auto"){ if(!cands.includes(t)) b.classList.add("dim"); else if(cands.length<all.length) b.classList.add("cand"); }
+    if(t!=="auto"&&TYPES[t].dir&&TYPES[t].dir!==S.dir) b.classList.add("dim");
+    seg.appendChild(b);
+  }
+  $("infer").innerHTML=S.typeSel!=="auto"?"":
+    cands.length===1?`推定：<b>${cands[0]}</b>`:
+    (S.u!=null&&observed()?`候補：<b>${cands.join("・")}</b>（駅の停車・通過で絞り込み中）`:(S.u!=null?"まだ判定材料がありません。最初の通過駅か停車駅で絞り込みます":""));
+  const st=$("status"); st.className="status "+(S.statusCls||""); $("statusText").textContent=S.statusMsg;
+
+  const hero=$("hero"); $("alerts").innerHTML="";
+  if(S.u==null){
+    hero.innerHTML=`<div class="eyebrow">次にトイレへ行ける駅</div><div class="name" style="font-size:26px">現在地が未設定です</div><div class="door">「位置情報で追跡」を押すか、下の一覧から今いる駅（または直前に出た駅）をタップしてください。</div>`;
+  } else {
+    // 候補ごとの次のトイレ駅を、駅ごとにまとめる
+    const groups=new Map();
+    for(const t of cands){const r=nextToilet(t); if(!r) continue; const g=groups.get(r.k)||{k:r.k,min:r.min,types:[]}; g.min=Math.min(g.min,r.min); g.types.push(t); groups.set(r.k,g);}
+    const gs=[...groups.values()].sort((a,b)=>a.min-b.min);
+    if(!gs.length){hero.innerHTML=`<div class="eyebrow">次にトイレへ行ける駅</div><div class="name" style="font-size:26px">この先にはありません</div><div class="door">終点です。方向を確認してください。</div>`;}
+    else{
+      const g=gs[0], s=ST[g.k], sure=gs.length===1;
+      const label=sure?(cands.length===1?cands[0]:(cands.length===all.length?"どの種別でも":cands.join("・"))):`${g.types.join("・")}の場合`;
+      hero.innerHTML=`<div class="eyebrow">次にトイレへ行ける駅（${label}）</div>
+        <div class="name">${s.n}<span class="code">${s.c}</span></div>
+        <div class="eta">あと <span class="num">${g.min<1?"&lt;1":Math.round(g.min)}</span> 分ほど</div>
+        ${s.note?`<div class="door">${s.note}</div>`:""}
+        ${g.k===5&&S.dir<0&&g.types.length===1&&g.types[0].includes("直通")?`<div class="door">練馬を出ると地下鉄線内に入ります。</div>`:""}
+        ${gs.length>1?`<div class="alt">${gs.slice(1).map(o=>`<div><span><span class="t">${o.types.join("・")}なら</span> <b>${ST[o.k].n}</b></span><span class="m">${fmt(o.min)}</span></div>`).join("")}</div>`:""}`;
+      if(sure){
+        const ns=nextStop(cands[0]);
+        if(ns&&ns.k===g.k&&g.min>=6) addAlert(`<b>${s.n}</b>まで<b>${fmt(g.min)}</b>止まりません。`);
+        if(ns&&ST[ns.k].t==="none") addAlert(`次に止まる<b>${ST[ns.k].n}</b>は改札内にトイレがありません。`);
+      } else {
+        const worst=gs[gs.length-1];
+        addAlert(`種別によって<b>${ST[g.k].n}</b>（${fmt(g.min)}）〜<b>${ST[worst.k].n}</b>（${fmt(worst.min)}）と差があります。駅を通過または停車すると自動で絞り込みます。車内の表示で種別が分かれば、上でタップしてください。`,"info");
+      }
+    }
+  }
+
+  // 駅一覧
+  const ul=$("strip"); ul.innerHTML="";
+  const list=S.u==null?(S.dir>0?ST.map((_,i)=>i):ST.map((_,i)=>LAST-i)):ahead();
+  if(S.u!=null){
+    const li=document.createElement("li"), near=Math.round(S.u), at=Math.abs(S.u-near)<0.05;
+    li.innerHTML=`<div class="here"><span class="rail"><span class="train"></span></span>${at?`${ST[near].n}付近`:`${ST[Math.floor(S.u)].n}〜${ST[Math.ceil(S.u)].n}間`}・${S.mode==="manual"||S.est?"時刻から推定":"現在地"}</div>`;
+    ul.appendChild(li);
+  }
+  for(const k of list){
+    const s=ST[k], n=cands.filter(t=>STOPSET[t].has(k));
+    const cls=n.length===cands.length?"":n.length?"maybe":"pass";
+    const tag=!n.length?`<span class="tag pass">通過</span>`:n.length<cands.length?`<span class="tag maybe">${n.length===1?n[0]:"一部"}は停車</span>`:s.t==="in"?`<span class="tag ok">改札内トイレ</span>`:`<span class="tag no">改札外のみ</span>`;
+    let m="";
+    if(S.u!=null&&n.length){const mins=Math.min(...n.map(t=>travel(S.u,k,S.dir,STOPSET[t]))); m=`<span class="min">${fmt(mins)}</span>`;}
+    const li=document.createElement("li");
+    li.innerHTML=`<button type="button" class="st ${cls}" data-k="${k}"><span class="rail"><span class="dot"></span></span><span class="nm">${s.n}<code>${s.c}</code></span><span class="tags">${tag}${m}</span></button>`;
+    ul.appendChild(li);
+  }
+}
+
+// ===== 操作 =====
+const primaryStops=()=>STOPSET[candidates()[0]];
+$("dirSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;S.dir=+b.dataset.dir;resetTrack();if(S.mode==="manual")S.est={u:S.u,t:Date.now()};render();});
+$("typeSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;S.typeSel=b.dataset.type;if(S.est)S.est={u:S.u,t:Date.now()};render();});
+$("strip").addEventListener("click",e=>{const b=e.target.closest(".st");if(!b)return;stopAll();S.u=+b.dataset.k;resetTrack();S.mode="manual";S.est={u:S.u,t:Date.now()};S.statusMsg="時刻から推定中";S.statusCls="demo";render();});
+
+let watchId=null, demoTimer=null;
+function stopAll(){S.pausedByHide=false; if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null;} if(demoTimer){clearInterval(demoTimer);demoTimer=null;} $("demoBtn").textContent="デモを再生"; $("gpsBtn").textContent="位置情報で追跡";}
+function stopTracking(msg){stopAll(); S.mode="idle"; S.prevFix=null; S.statusMsg=msg||"停止中"; S.statusCls=""; render();}
+function startWatch(){
+  watchId=navigator.geolocation.watchPosition(
+    p=>{const c=p.coords; onFix(c.latitude,c.longitude,p.timestamp,c.accuracy);},
+    err=>{
+      if(err.code===1){S.consented=false; stopTracking("位置情報が許可されませんでした"); $("hint").textContent="位置情報なしでも、駅をタップする手動モードで使えます。";}
+      else if(err.code===3){S.statusMsg="位置が取れません（地下など）";render();}
+      else stopTracking("位置情報を使えません");
+    },
+    {enableHighAccuracy:true,maximumAge:5000,timeout:20000});
+  $("gpsBtn").textContent="追跡を止める";
+}
+function beginGps(){
+  stopAll();
+  if(!("geolocation" in navigator)){S.statusMsg="この環境では位置情報が使えません";S.statusCls="err";render();return;}
+  S.mode="gps"; S.u=null; resetTrack(); S.typeSel="auto"; S.gpsStart=Date.now();
+  S.statusMsg="位置情報を取得中…"; S.statusCls=""; render(); startWatch();
+}
+$("gpsBtn").addEventListener("click",()=>{
+  if(watchId!=null||S.pausedByHide){stopTracking("停止中");return;}
+  if(S.consented){beginGps();return;}
+  $("consent").hidden=false; $("consentYes").focus();
+});
+$("consentYes").addEventListener("click",()=>{$("consent").hidden=true; S.consented=true; beginGps();});
+$("consentNo").addEventListener("click",()=>{$("consent").hidden=true; $("gpsBtn").focus();});
+$("consent").addEventListener("click",e=>{if(e.target.id==="consent") $("consent").hidden=true;});
+
+// 画面を閉じたら位置の取得そのものを止める。戻ったら再開
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden&&S.mode==="gps"&&watchId!=null){navigator.geolocation.clearWatch(watchId); watchId=null; S.pausedByHide=true;}
+  else if(!document.hidden&&S.pausedByHide&&S.mode==="gps"){S.pausedByHide=false; S.prevFix=null; startWatch();}
+});
+
+// デモ
+function buildDemo(){
+  const stops=STOPSET[DEMO.type], kf=[{t:0,u:DEMO.from}]; let t=0;
+  for(let m=DEMO.from;m<DEMO.to;m++){
+    let d=SEG[m]; if(!stops.has(m)) d-=PASS_BONUS/2; if(!stops.has(m+1)) d-=PASS_BONUS/2;
+    t+=d; kf.push({t,u:m+1}); if(stops.has(m+1)&&m+1<DEMO.to){t+=DWELL;kf.push({t,u:m+1});}
+  }
+  return kf;
+}
+function uAtDemo(kf,t){for(let i=1;i<kf.length;i++){if(t<=kf[i].t){const a=kf[i-1],b=kf[i];return a.u+(b.u-a.u)*((t-a.t)/(b.t-a.t||1));}}return kf[kf.length-1].u;}
+$("demoBtn").addEventListener("click",()=>{
+  if(demoTimer){stopTracking("停止中");return;}
+  stopAll(); const kf=buildDemo(), end=kf[kf.length-1].t; let simMs=0;
+  S.mode="demo"; S.typeSel="auto"; S.dir=DEMO.dir; S.u=DEMO.from; resetTrack();
+  $("demoBtn").textContent="デモを止める";
+  demoTimer=setInterval(()=>{
+    simMs+=5000; const tm=simMs/60000, u=Math.min(uAtDemo(kf,tm),LAST-1e-6), [la,lo]=uToLatLng(u);
+    onFix(la+(Math.random()-.5)*0.00008,lo+(Math.random()-.5)*0.00008,simMs,30);
+    if(tm>=end) stopTracking("デモ終了");
+  },250);
+});
+
+// 手動モード・GPS途切れ時の推定、追跡の上限時間
+setInterval(()=>{
+  if(S.mode==="gps"&&Date.now()-S.gpsStart>TRACK_MAX_MIN*60000){stopTracking("120分たったので追跡を止めました");return;}
+  if(S.mode==="manual"&&S.est){S.u=advance(S.est.u,S.dir,(Date.now()-S.est.t)/60000,primaryStops());render();}
+  else if(S.mode==="gps"&&S.u!=null&&Date.now()-S.lastGood>45000){
+    if(!S.est) S.est={u:S.u,t:S.lastGood};
+    S.u=advance(S.est.u,S.dir,(Date.now()-S.est.t)/60000,primaryStops());
+    S.statusMsg="電波が弱いため時刻から推定中"; render();
+  }
+},5000);
+
+// アプリとして使うとき（ホーム画面に追加）はオフラインでも開けるようにする
+if("serviceWorker" in navigator&&location.protocol==="https:"&&!/claude|anthropic/.test(location.hostname)){
+  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});
+}
+
+render();
+</script>
+
+</body>
+</html>
